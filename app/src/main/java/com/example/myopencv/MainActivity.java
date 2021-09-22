@@ -36,17 +36,18 @@ public class MainActivity extends CameraActivity implements CameraBridgeViewBase
 
     private CameraBridgeViewBase mOpenCvCameraView;
     private Net opencvNet;
+    private Mat frame;
 
     private CNNExtractorService cnnService;
-
 
     private BaseLoaderCallback mLoaderCallback = new BaseLoaderCallback(this) {
         @Override
         public void onManagerConnected(int status) {
             switch (status) {
                 case LoaderCallbackInterface.SUCCESS: {
-                    Log.i(TAG, "OpenCV loaded successfully!");
+                    Log.i("OpenCV", "OpenCV loaded successfully");
                     mOpenCvCameraView.enableView();
+                    frame = new Mat();
                 }
                 break;
                 default: {
@@ -59,10 +60,15 @@ public class MainActivity extends CameraActivity implements CameraBridgeViewBase
 
     @Override
     public void onResume() {
-        super.onResume();
         // OpenCV manager initialization
-        OpenCVLoader.initDebug();
-        mLoaderCallback.onManagerConnected(LoaderCallbackInterface.SUCCESS);
+        super.onResume();
+        if (!OpenCVLoader.initDebug()) {
+            Log.d("OpenCV", "Internal OpenCV library not found. Using OpenCV Manager for initialization");
+            OpenCVLoader.initAsync(OpenCVLoader.OPENCV_VERSION, this, mLoaderCallback);
+        } else {
+            Log.d("OpenCV", "OpenCV library found inside package. Using it!");
+            mLoaderCallback.onManagerConnected(LoaderCallbackInterface.SUCCESS);
+        }
     }
 
 
@@ -72,10 +78,14 @@ public class MainActivity extends CameraActivity implements CameraBridgeViewBase
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         setContentView(R.layout.activity_main);
 
+        if (!OpenCVLoader.initDebug()) {
+            // Handle initialization error
+        }
+
         // initialize implementation of CNNExtractorService
         this.cnnService = new CNNExtractorServiceImpl();
         // configure camera listener
-        mOpenCvCameraView = (CameraBridgeViewBase) findViewById(R.id.CameraView);
+        mOpenCvCameraView = findViewById(R.id.CameraView);
         mOpenCvCameraView.setVisibility(CameraBridgeViewBase.VISIBLE);
         mOpenCvCameraView.setCvCameraViewListener(this);
     }
@@ -98,12 +108,15 @@ public class MainActivity extends CameraActivity implements CameraBridgeViewBase
 
 
     public Mat onCameraFrame(CameraBridgeViewBase.CvCameraViewFrame inputFrame) {
-        Mat frame = inputFrame.rgba();
+        frame = inputFrame.rgba();
         String classesPath = getPath(IMAGENET_CLASSES, this);
         String predictedClass = cnnService.getPredictedLabel(frame, opencvNet, classesPath);
 
         // place the predicted label on the image
-        Imgproc.putText(frame, predictedClass, new Point(200, 100), Imgproc.FONT_HERSHEY_SIMPLEX, 2, new Scalar(255, 121, 0), 3);
+        Imgproc.putText(frame, predictedClass, new Point(100, 100),
+                Imgproc.FONT_HERSHEY_SIMPLEX, 1,
+                new Scalar(255, 121, 0), 3
+        );
 
         return frame;
     }
